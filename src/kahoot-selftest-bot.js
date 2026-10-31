@@ -1,10 +1,11 @@
 /*
- * Kahoot self-test bot — baseline: poll every 300 ms.
+ * Kahoot self-test bot — event-driven.
  * The only worker-owned file. The fixture and oracle are pinned.
  *
- * v2 fixture: a question becomes answerable only after it has been painted, and
- * a click before that is ignored (like a real client that must receive the
- * question first). So the bot re-reads the live flag on every tick.
+ * The fixture paints a question, then flips `#answers[data-live="1"]`. Reacting
+ * to that mutation removes the poll interval from the path: the click lands in
+ * the same frame the question becomes answerable. The 300 ms interval is only a
+ * watchdog for a starved observer.
  */
 (() => {
   const tick = () => {
@@ -19,7 +20,16 @@
       .find((b) => Number((b.textContent || '').trim()) === sum);
     if (hit) hit.click();
   };
-  setInterval(tick, 300);
-  tick();
-  window.__kbot = { mode: 'poll300' };
+
+  new MutationObserver(tick).observe(document.body, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['data-live'],
+  });
+
+  setInterval(tick, 300); // watchdog only
+  tick(); // a question may already be live
+  window.__kbot = { mode: 'mutation' };
 })();
