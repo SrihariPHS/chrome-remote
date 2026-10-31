@@ -109,14 +109,18 @@
       box.appendChild(b);
     }
 
-    // Answerable only after the question has actually been painted. This is the
-    // whole point of v2: the clock starts when a question is on screen.
+    // Answerable only after the question has actually been painted. Two frames:
+    // the first paints this question, the second runs before the next paint, so
+    // no click can land before the question has been on screen for a frame.
     requestAnimationFrame(() => {
       if (state.idx !== idx || state.done) return;
-      state.live = true;
-      state.shownAt = performance.now();
-      state.paints++;
-      $('#answers').setAttribute('data-live', '1');
+      requestAnimationFrame(() => {
+        if (state.idx !== idx || state.done) return;
+        state.live = true;
+        state.shownAt = performance.now();
+        state.paints++;
+        $('#answers').setAttribute('data-live', '1');
+      });
     });
   }
 
