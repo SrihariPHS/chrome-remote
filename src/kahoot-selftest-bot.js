@@ -1,32 +1,25 @@
 /*
- * Kahoot self-test bot — event-driven.
+ * Kahoot self-test bot — baseline: poll every 300 ms.
  * The only worker-owned file. The fixture and oracle are pinned.
  *
- * Answers as soon as the question mutates into the DOM: no polling delay in the
- * path. A 300 ms interval is kept only as a watchdog for the case where the
- * observer is somehow starved.
+ * v2 fixture: a question becomes answerable only after it has been painted, and
+ * a click before that is ignored (like a real client that must receive the
+ * question first). So the bot re-reads the live flag on every tick.
  */
 (() => {
-  let last = '';
-
   const tick = () => {
+    if (!document.querySelector('#answers[data-live="1"]')) return;
     const q = document.querySelector('#question');
     const text = q ? q.textContent.trim() : '';
-    if (!text || text === last) return;
+    if (!text) return;
     const m = text.match(/(\d+)\s*\+\s*(\d+)/);
     if (!m) return;
     const sum = Number(m[1]) + Number(m[2]);
     const hit = [...document.querySelectorAll('.answer')]
       .find((b) => Number((b.textContent || '').trim()) === sum);
-    if (!hit) return;
-    last = text;
-    hit.click();
+    if (hit) hit.click();
   };
-
-  const mo = new MutationObserver(tick);
-  mo.observe(document.body, { subtree: true, childList: true, characterData: true });
-
-  setInterval(tick, 300); // watchdog only
-  tick(); // the question may already be on screen
-  window.__kbot = { mode: 'mutation' };
+  setInterval(tick, 300);
+  tick();
+  window.__kbot = { mode: 'poll300' };
 })();
