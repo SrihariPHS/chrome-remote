@@ -1,9 +1,14 @@
 /*
- * Kahoot self-test bot — baseline: poll every 300 ms.
+ * Kahoot self-test bot — event-driven.
  * The only worker-owned file. The fixture and oracle are pinned.
+ *
+ * Answers as soon as the question mutates into the DOM: no polling delay in the
+ * path. A 300 ms interval is kept only as a watchdog for the case where the
+ * observer is somehow starved.
  */
 (() => {
   let last = '';
+
   const tick = () => {
     const q = document.querySelector('#question');
     const text = q ? q.textContent.trim() : '';
@@ -17,7 +22,11 @@
     last = text;
     hit.click();
   };
-  setInterval(tick, 300);
-  tick();
-  window.__kbot = { mode: 'poll300' };
+
+  const mo = new MutationObserver(tick);
+  mo.observe(document.body, { subtree: true, childList: true, characterData: true });
+
+  setInterval(tick, 300); // watchdog only
+  tick(); // the question may already be on screen
+  window.__kbot = { mode: 'mutation' };
 })();
