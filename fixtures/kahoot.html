@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kahoot! — demo quiz</title>
+<style>
+  :root { --p:#46178f; --p2:#2d0d63; --red:#e21b3c; --blue:#1368ce; --yellow:#d89e00; --green:#26890c; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Montserrat", -apple-system, system-ui, sans-serif;
+    background: radial-gradient(1200px 700px at 50% -20%, #6a2fb4, transparent 60%), var(--p);
+    color: #fff; display: flex; flex-direction: column; overflow: hidden;
+  }
+  header { display: flex; align-items: center; gap: 16px; padding: 18px 26px; }
+  .logo { font-weight: 900; letter-spacing: -.04em; font-size: 22px; }
+  .logo i { color: #ffd400; font-style: normal; }
+  .pill { background: rgba(0,0,0,.22); border-radius: 999px; padding: 7px 14px; font-weight: 700; font-size: 14px; }
+  .pill span { opacity: .65; font-weight: 500; font-size: 12px; margin-right: 5px; }
+  .spacer { flex: 1; }
+  main { flex: 1; display: grid; grid-template-columns: 1fr 300px; gap: 26px; padding: 6px 34px 26px; min-height: 0; }
+  .question { background: #fff; color: #222; border-radius: 12px; padding: 26px 30px; display: flex; flex-direction: column; min-height: 0; }
+  .qmeta { font-size: 13px; font-weight: 700; color: #7a7a86; letter-spacing: .04em; }
+  #question { font-size: clamp(24px, 3.2vw, 40px); font-weight: 800; margin: 14px 0 22px; line-height: 1.15; }
+  .answers { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start; }
+  .answer {
+    border: 0; border-radius: 8px; padding: 18px 20px; color: #fff; text-align: left;
+    font: 700 20px/1.25 inherit; cursor: pointer; display: flex; align-items: center; gap: 14px;
+    box-shadow: inset 0 -5px rgba(0,0,0,.22); transition: transform .06s, filter .12s;
+  }
+  .answer:nth-child(1) { background: var(--red); } .answer:nth-child(2) { background: var(--blue); }
+  .answer:nth-child(3) { background: var(--yellow); } .answer:nth-child(4) { background: var(--green); }
+  .answer:hover { filter: brightness(1.08); } .answer:active { transform: translateY(2px); }
+  .answer .shape { width: 26px; height: 26px; flex: 0 0 26px; background: rgba(255,255,255,.9); }
+  .answer:nth-child(1) .shape { clip-path: polygon(50% 0,100% 100%,0 100%); }
+  .answer:nth-child(2) .shape { transform: rotate(45deg) scale(.72); }
+  .answer:nth-child(3) .shape { border-radius: 50%; }
+  .answer:nth-child(4) .shape { clip-path: polygon(50% 0,100% 50%,50% 100%,0 50%); }
+  .answer.picked { outline: 4px solid #fff; }
+  .answer.dim { opacity: .35; }
+  .clock { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .ring {
+    width: 220px; height: 220px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, #5b2aa3, #2a0b5c);
+    display: grid; place-items: center; box-shadow: 0 24px 60px rgba(0,0,0,.35), inset 0 0 0 10px rgba(255,255,255,.08);
+  }
+  #countdown { font: 900 76px/1 "Montserrat", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+  .clock-label { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; opacity: .55; }
+  #score { font: 800 30px/1 inherit; }
+  .scorebox { width: 220px; text-align: center; }
+  .scorebox .lbl { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; opacity: .5; }
+  .next {
+    display: none; margin: 14px 0 0; border: 0; border-radius: 8px; padding: 13px 22px;
+    font: 800 16px inherit; background: #ffd400; color: #2a0b5c; cursor: pointer;
+  }
+  .next.on { display: inline-block; }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #17102a; padding: 10px 16px; border-radius: 9px; font-weight: 700; display: none; }
+  .toast.on { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">kahoot<i>!</i> <span style="font-size:11px;opacity:.45;font-weight:600;letter-spacing:.1em">DEMO</span></div>
+  <div class="pill"><span>Question</span><b id="qnum">1</b> / 3</div>
+  <div class="spacer"></div>
+  <div class="pill"><span>Streak</span><b id="streak">0</b></div>
+</header>
+<main>
+  <section class="question">
+    <div class="qmeta" id="qmeta">QUESTION 1 OF 3</div>
+    <div id="question">Which planet is known as the Red Planet?</div>
+    <div class="answers" id="answers">
+      <button class="answer"><span class="shape"></span><span>Venus</span></button>
+      <button class="answer"><span class="shape"></span><span>Mars</span></button>
+      <button class="answer"><span class="shape"></span><span>Jupiter</span></button>
+      <button class="answer"><span class="shape"></span><span>Mercury</span></button>
+    </div>
+    <button class="next" id="next">Next question →</button>
+  </section>
+  <aside class="clock">
+    <div class="ring"><div id="countdown">20.00</div></div>
+    <div class="clock-label">seconds left</div>
+    <div class="scorebox"><div class="lbl">Score</div><div id="score">0</div></div>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+  const QS = [
+    { q: 'Which planet is known as the Red Planet?', a: ['Venus', 'Mars', 'Jupiter', 'Mercury'], correct: 1 },
+    { q: 'What does HTML stand for?', a: ['Hyper Text Markup Language', 'High Tech Modern Link', 'Home Tool Markup Language', 'Hyperlink Text Machine Language'], correct: 0 },
+    { q: 'Which ocean is the largest?', a: ['Atlantic', 'Indian', 'Arctic', 'Pacific'], correct: 3 },
+  ];
+  const LIMIT = (Number(new URLSearchParams(location.search).get('limit')) || 20) * 1000;
+  let qi = 0, score = 0, streak = 0, started = 0, raf = 0, answered = false, remaining = LIMIT;
+  const $ = (s) => document.querySelector(s);
+  const answers = [...document.querySelectorAll('.answer')];
+
+  function render() {
+    const Q = QS[qi];
+    $('#qnum').textContent = qi + 1;
+    $('#qmeta').textContent = `QUESTION ${qi + 1} OF ${QS.length}`;
+    $('#question').textContent = Q.q;
+    answers.forEach((b, i) => {
+      b.querySelector('span:last-child').textContent = Q.a[i];
+      b.classList.remove('picked', 'dim');
+      b.disabled = false;
+    });
+    $('#next').classList.remove('on');
+    answered = false;
+    started = performance.now();
+    remaining = LIMIT;
+    tick();
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(tick);
+  }
+
+  function tick() {
+    if (answered) return;
+    remaining = Math.max(0, LIMIT - (performance.now() - started));
+    $('#countdown').textContent = (remaining / 1000).toFixed(2);
+    if (remaining <= 0) { timeUp(); return; }
+    raf = requestAnimationFrame(tick);
+  }
+
+  function timeUp() {
+    answered = true;
+    answers.forEach((b, i) => { b.disabled = true; if (i !== QS[qi].correct) b.classList.add('dim'); });
+    showToast('time’s up');
+    $('#next').classList.add('on');
+  }
+
+  function showToast(t) { const x = $('#toast'); x.textContent = t; x.classList.add('on'); setTimeout(() => x.classList.remove('on'), 1400); }
+
+  answers.forEach((b, i) => b.addEventListener('click', () => {
+    if (answered) return;
+    answered = true;
+    const Q = QS[qi];
+    const right = i === Q.correct;
+    b.classList.add('picked');
+    answers.forEach((x, j) => { if (j !== i) x.classList.add('dim'); });
+    if (right) {
+      const gain = 500 + Math.round(remaining / 1000) * 50;
+      score += gain; streak++; $('#score').textContent = score; $('#streak').textContent = streak;
+      showToast(`correct +${gain}`);
+    } else {
+      streak = 0; $('#streak').textContent = 0;
+      showToast('incorrect');
+    }
+    $('#next').classList.add('on');
+  }));
+
+  $('#next').addEventListener('click', () => {
+    if (qi < QS.length - 1) { qi++; render(); }
+    else { answered = true; $('#question').textContent = 'Final score: ' + score; $('#next').classList.remove('on'); showToast('quiz complete'); }
+  });
+
+  window.__truth = () => ({
+    remaining_ms: Math.round(remaining * 10) / 10,
+    remaining_s: Math.round(remaining) / 1000,
+    question: $('#question').textContent,
+    qi, score, streak, answered,
+    countdown_text: $('#countdown').textContent,
+  });
+
+  render();
+</script>
+</body>
+</html>

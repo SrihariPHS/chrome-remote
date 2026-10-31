@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>chrome.inkwork.studio</title>
+  <meta name="description" content="A warm remote Chromium you drive with one intent per call." />
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="stylesheet" href="/style.css?v=20261031c" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <a class="brand" href="/" aria-label="chrome.inkwork.studio">
+        <span class="mark" aria-hidden="true"></span>
+        <span class="word">chrome</span><span class="domain">.inkwork.studio</span>
+      </a>
+      <div class="status" id="status" title="connection">
+        <span class="dot" id="dot"></span>
+        <span id="statusText">connecting</span>
+      </div>
+      <div class="spacer"></div>
+      <div class="metric" title="median round trip of the busiest operation">
+        <span id="lat">—</span><span class="unit">ms p50</span>
+      </div>
+      <div class="metric ghost" title="snapshot size">
+        <span id="obs">—</span><span class="unit">obs</span>
+      </div>
+      <button class="btn" id="fullScreen" title="Full-screen browser">Full screen</button>
+      <button class="btn primary" id="newSession">New session</button>
+    </header>
+
+    <main class="grid">
+      <aside class="rail">
+        <div class="rail-title">Sessions <span class="count" id="sessionCount">0</span></div>
+        <div class="sessions" id="sessions"></div>
+        <div class="rail-empty" id="railEmpty">
+          <p>No warm sessions yet.</p>
+          <p class="dim">Create one, then point it anywhere.</p>
+        </div>
+        <form class="open" id="openForm">
+          <input id="urlInput" type="text" placeholder="https://…" spellcheck="false" autocomplete="off" aria-label="Open URL" />
+          <button class="btn" type="submit" aria-label="Open URL">→</button>
+        </form>
+        <div class="rail-foot">
+          <div class="foot-line"><span class="k">API</span><a href="/llms.txt" target="_blank" rel="noreferrer">llms.txt</a></div>
+          <div class="foot-line"><span class="k">MCP</span><code>/mcp</code></div>
+          <div class="foot-line"><span class="k">Build</span><code>0.1.0</code></div>
+        </div>
+      </aside>
+
+      <section class="stage">
+        <div class="browser">
+          <div class="browser-bar">
+            <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="urlbar" id="urlbar" title="current URL">about:blank</div>
+            <button class="icon" id="reload" title="Reload">⟳</button>
+            <button class="icon" id="shot" title="Screenshot">◉</button>
+            <a class="icon console-link" href="/console" title="Full console">▤</a>
+            <button class="btn small control" id="control" aria-pressed="false">Take control</button>
+          </div>
+          <div class="screen" id="screen">
+            <canvas id="live" tabindex="0" aria-label="Live browser view"></canvas>
+            <img id="poster" alt="" />
+            <div class="empty" id="empty">
+              <div class="empty-mark"></div>
+              <h2>Give an agent a browser.</h2>
+              <p>One warm Chromium. One snapshot per intent. Refs, not pixels.</p>
+              <div class="empty-actions">
+                <button class="btn primary" id="emptyNew">New session</button>
+                <button class="btn" id="emptyDemo">Open the demo page</button>
+              </div>
+              <div class="kbd"><kbd>⌘</kbd><kbd>↵</kbd> runs an intent, not a click</div>
+            </div>
+            <div class="live-chip hidden" id="liveChip"><i></i>LIVE <span id="fps"></span></div>
+            <div class="sorry hidden" id="sorry">
+              <div class="sorry-card">
+                <div class="eyebrow">Google search is blocked</div>
+                <h2>Google is asking for a robot check</h2>
+                <p>That page is Google’s, served to the NAS datacenter IP. It can’t be solved from here.</p>
+                <p class="dim">The <code>/google</code> skill answers through the search index instead.</p>
+                <button class="btn primary" id="sorryBack">Back to Google</button>
+              </div>
+            </div>
+            <div class="toast hidden" id="toast"></div>
+          </div>
+        </div>
+
+        <div class="intent">
+          <div class="intent-head">
+            <div class="seg" id="examples">
+              <button data-ex="snap">snap</button>
+              <button data-ex="pulse">pulse</button>
+              <button data-ex="timer">reflex</button>
+              <button data-ex="docs">read</button>
+              <button data-ex="quiz">quiz</button>
+            </div>
+            <span class="hint">one snippet = one round trip · <kbd>⌘</kbd><kbd>↵</kbd></span>
+          </div>
+          <textarea id="code" spellcheck="false" aria-label="Intent">return iw.snap({ max: 100 })</textarea>
+          <div class="intent-foot">
+            <span id="intentMsg">ready</span>
+            <div class="intent-actions">
+              <button class="btn primary" id="run">Run <kbd>⌘↵</kbd></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="inspect">
+        <div class="tabs" role="tablist">
+          <button class="tab on" data-tab="pulse" role="tab">Pulse</button>
+          <button class="tab" data-tab="tree" role="tab">Tree</button>
+          <button class="tab" data-tab="log" role="tab">Log</button>
+        </div>
+
+        <div class="panel on" id="tab-pulse">
+          <div class="timer-card" id="timerCard">
+            <div class="eyebrow">Countdown <span id="timerSrc">—</span></div>
+            <div class="timer" id="timer">—</div>
+            <div class="timer-meta" id="timerMeta">no timer on this page</div>
+            <canvas id="spark" width="300" height="52"></canvas>
+          </div>
+          <div class="kv" id="pulseKv">
+            <div><span>Focus</span><b id="kvFocus">—</b></div>
+            <div><span>Changed</span><b id="kvChange">—</b></div>
+            <div><span>Viewport</span><b id="kvView">—</b></div>
+            <div><span>Seq</span><b id="kvSeq">—</b></div>
+          </div>
+          <div class="nums" id="numbers"></div>
+          <div class="alerts" id="alerts"></div>
+        </div>
+
+        <div class="panel" id="tab-tree">
+          <div class="panel-head"><span id="treeTitle">Observation</span><span class="dim" id="treeBytes"></span></div>
+          <pre class="tree" id="tree">run an intent to see the ref tree</pre>
+        </div>
+
+        <div class="panel" id="tab-log">
+          <div class="panel-head"><span>Timeline</span><span class="dim" id="logMeta"></span></div>
+          <div class="log" id="log"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="gate hidden" id="gate">
+    <form class="gate-card" id="gateForm">
+      <div class="mark"></div>
+      <h1>chrome<span>.inkwork.studio</span></h1>
+      <p>Enter the access PIN.</p>
+      <input id="tokenInput" type="password" inputmode="numeric" placeholder="PIN" autocomplete="one-time-code" />
+      <button class="btn primary" type="submit">Open Chrome</button>
+      <p class="dim small" id="gateMsg">Owner access only.</p>
+    </form>
+  </div>
+
+  <script src="/app.js?v=20261031c" type="module"></script>
+</body>
+</html>

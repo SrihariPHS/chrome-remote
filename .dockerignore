@@ -1,0 +1,9 @@
+node_modules
+data
+deploy/data
+deploy/secrets.env
+bench
+test
+.git
+*.log
+bench/ui*.png

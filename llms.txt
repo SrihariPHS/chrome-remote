@@ -1,0 +1,153 @@
+# chrome.inkwork.studio
+
+> A warm remote Chromium you drive with **one intent per call** — compact ref
+> snapshots instead of screenshots, server-side batches instead of one call per
+> click, and in-page reflexes that react in 4–16 ms so countdowns and
+> fast-changing UI are usable by an agent.
+
+Base URL: `https://chrome.inkwork.studio` (or `http://127.0.0.1:8787` locally).
+Auth: `Authorization: Bearer $IW_TOKEN` on every `/api/*` and `/mcp` request.
+The token is printed by the server and stored in `data/token`.
+
+## The loop (three calls, not thirty)
+
+1. **Open** — `POST /api/sessions` `{"name":"docs","url":"https://docs.google.com/…"}`
+   → `{session:{id}}`. One warm Chromium context per session, isolated.
+2. **Observe** — `POST /api/s/{id}/snap` `{"max":100}` → compact text tree with
+   `@e12` refs, roles, values, bounds, and a `seq` number. ~3–10 ms engine time.
+3. **Act** — `POST /api/s/{id}/act` with a whole batch. Returns the post-batch
+   observation, so the next decision needs no extra call.
+
+```json
+POST /api/s/s_1/act
+{"steps":[
+  {"click":"@e4"},
+  {"fill":{"ref":"@e12","text":"Ada Lovelace"}},
+  {"fill":{"ref":"@e13","text":"ada@example.com"}},
+  {"select":{"ref":"@e15","value":"engineer"}},
+  {"click":{"text":"I agree"}},
+  {"click":"Create account"}
+]}
+```
+
+Set `"input":"dom"` to click in-page (roughly 3–10× faster than trusted CDP
+input; works with most React apps). The default `"cdp"` sends real mouse events
+for canvas, file pickers and flows that reject synthetic clicks.
+
+`verify` defaults to `"change"`: it waits up to 300 ms for the control/URL/
+title/dialog **signature** to change — a ticking clock alone does not count as
+success. Use `"mutation"` for a raw DOM-mutation check, or `"none"` to skip
+verification entirely when speed matters more. A failing step stops the batch
+unless it sets `"optional": true`. Refs are stable for the life of the element and are refused
+with `stale` if the element was replaced — a wrong-element click is never issued.
+
+## Observing like a native, not like a screenshot tool
+
+- `POST /api/s/{id}/pulse` → `{countdown:{est,rate,age,dir,...}, numbers, focus,
+  dialogs, last_change_age_ms, seq, viewport}`. `est` is **seconds remaining
+  extrapolated to read time** (`est * 1000` for ms) from a sample taken inside
+  the page, so a 20 ms old sample of a 10 ms timer is corrected, not stale. The
+  live console view lags the page; `pulse` is the ground truth. No screenshot
+  (~45 ms) and no pixels to parse.
+- `POST /api/s/{id}/wait` `{"text":"Saved","timeout_ms":8000}` → waits inside
+  the page, in one request. Do not poll from the model.
+- `POST /api/s/{id}/screenshot` → JPEG data URL. This is the slow path
+  (~45 ms); use it for layout/canvas questions only.
+
+## Reacting faster than a model: reflexes
+
+`POST /api/s/{id}/reflex`
+
+```json
+{"until":"snap.countdown && snap.countdown.est < 1.5",
+ "do":"iw.click('@e9')",
+ "every_ms":8,
+ "timeout_ms":10000}
+```
+
+`until` is a JS expression over `(iw, snap)`; `do` is a JS expression executed
+the moment it becomes true. Both run **inside the page**, so the reaction is
+measured in single-digit milliseconds. The response includes `reaction_ms` and
+a sampled trace. This is the correct tool for Kahoot countdowns, quiz timers,
+video cues, and any UI that changes faster than a model round trip.
+
+## Code mode: `eval`
+
+`POST /api/s/{id}/eval` `{"code":"return iw.snap({max:40})"}` runs JavaScript in
+the page with the `iw` SDK. One call can loop, filter, aggregate and act over
+hundreds of elements — the fastest path for scraping and repetitive flows.
+Use `return` for the result; async is supported.
+
+```js
+// read every row of a table in one round trip
+const rows = [...document.querySelectorAll('table tr')].map(r => r.innerText);
+return { rows: rows.slice(0, 20), n: rows.length };
+```
+
+### `iw` SDK (in-page)
+
+| call | meaning |
+|---|---|
+| `iw.snap({max, scope})` | compact ref tree + `text` |
+| `iw.pulse()` | timers, scores, focus, dialogs, mutation age |
+| `iw.click(ref \| text \| {selector} \| {x,y})` | page-side click (instant, synthetic) |
+| `iw.fill(ref, text)` | native setter / execCommand; React-safe |
+| `iw.select(ref, value)` / `iw.check(ref, on)` | form controls |
+| `iw.waitFor({text, selector, predicate, since, timeout_ms})` | in-page wait |
+| `iw.reflex({until, do, every_ms, timeout_ms})` | in-page reflex |
+| `iw.read(target?, max?)` / `iw.find(text)` | text extraction |
+| `iw.sig()` | control/url/title/dialog signature (verification) |
+| `iw.log(...)` | returns in the eval response `logs` |
+
+`iw.click` is synthetic (fast, works for most apps). Use the declarative `act`
+steps when you need trusted CDP mouse/keyboard events.
+
+## Recipes (heuristic shortcuts)
+
+`GET /api/recipes` lists them; `POST /api/s/{id}/recipe/quiz.state` etc.
+
+- `quiz.state` → question, answer tiles with refs, countdown, score, phase.
+- `quiz.answer` `{"index":1}` / `{"text":"Mars"}` → picks an answer.
+- `kahoot.join` `{"pin":"123456","name":"agent"}` → opens kahoot.it, accepts
+  cookies, enters the PIN and nickname. `dry_run:true` stops after the PIN.
+- `doc.append` `{"text":"…"}` → appends to a contenteditable/Docs-style editor.
+- `doc.read` → visible document text.
+
+They are heuristics over generic quiz/doc UIs (tested against Kahoot-shaped and
+Docs-shaped fixtures), not vendor integrations. Read the returned `evidence`.
+
+## MCP
+
+Add as a remote MCP server (streamable HTTP, stateless):
+
+```json
+{"mcpServers":{"chrome":{"type":"http","url":"https://chrome.inkwork.studio/mcp",
+  "headers":{"Authorization":"Bearer $IW_TOKEN"}}}}
+```
+
+Tools: `chrome_sessions`, `chrome_open`, `chrome_snap`, `chrome_act`,
+`chrome_eval`, `chrome_pulse`, `chrome_reflex`, `chrome_wait`, `chrome_close`.
+Each tool call is one intent. Do not use one call per click.
+
+## Latency budget (measured on the NAS, see /api/metrics)
+
+| operation | p50 | notes |
+|---|---|---|
+| in-page eval | ~1 ms | CDP round trip |
+| snapshot (small page) | ~3–8 ms | server-merged, frame-aware |
+| batched act (8 steps) | ~40 ms | includes trusted input + verify |
+| pulse | ~1–2 ms | no screenshot |
+| screenshot | ~45 ms | avoid in the loop |
+| reflex reaction | 4–16 ms | inside the page, no network |
+
+## Limits and safety
+
+- `IW_MAX_SESSIONS` (default 4) warm contexts; each is isolated (own cookies,
+  storage, permissions). Sessions expire only when closed or the process stops.
+- URLs are restricted to `http(s)` and `about:blank`; uploads must live under
+  `data/uploads`.
+- This is a browser-control service: the token is equivalent to control of the
+  browser. Put it behind HTTPS + a long token (or Cloudflare Access) before
+  exposing it. Do not run it on a shared host without a gate.
+- `POST /api/s/{id}/eval` executes page JavaScript, not Node. The browser can
+  still reach private-network URLs; treat it as a network foothold.

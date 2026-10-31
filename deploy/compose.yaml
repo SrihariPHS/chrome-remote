@@ -1,0 +1,45 @@
+name: chrome-inkwork
+
+networks:
+  default:
+  oc:
+    external: true
+    name: inkwork-agents_oc-internal
+
+services:
+  chrome:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: chrome-inkwork:0.1.0
+    container_name: chrome-inkwork
+    restart: unless-stopped
+    env_file:
+      - ./secrets.env
+    environment:
+      IW_PORT: "8787"
+      IW_DATA: /data
+      IW_MAX_SESSIONS: "3"
+      IW_POOL: "2"
+      IW_SESSION_TTL_MIN: "90"
+      IW_HEADFUL: "1"
+    ports:
+      # Loopback only: the Cloudflare tunnel reaches it from the host.
+      # (host 8787 is already used by the school container)
+      - "127.0.0.1:8788:8787"
+    networks:
+      default:
+      oc:
+        aliases:
+          - chrome-inkwork
+    volumes:
+      - ./data:/data
+    shm_size: "1gb"
+    mem_limit: 2g
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

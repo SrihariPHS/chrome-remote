@@ -1,0 +1,12 @@
+# If cloudflared runs on the host (the common NAS setup):
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: chrome.inkwork.studio
+    service: http://127.0.0.1:8787
+  # Keep every existing hostname below this new one; do not replace the file.
+  - service: http_status:404
+
+# If cloudflared shares a Docker network with this stack, use:
+#   service: http://chrome-inkwork:8787

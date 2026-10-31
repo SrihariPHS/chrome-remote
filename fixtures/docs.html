@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Untitled document — Docs demo</title>
+<style>
+  body { margin: 0; background: #f7f7f8; font-family: Arial, Helvetica, sans-serif; color: #202124; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 18px; background: #fff; border-bottom: 1px solid #e4e4e7; position: sticky; top: 0; }
+  .docicon { width: 30px; height: 38px; border-radius: 4px; background: #4285f4; position: relative; }
+  .docicon:after { content: ""; position: absolute; left: 8px; right: 8px; top: 12px; height: 2px; background: #fff; box-shadow: 0 6px #fff, 0 12px #fff; }
+  .title { font-size: 15px; font-weight: 600; }
+  .menu { display: flex; gap: 18px; font-size: 13px; color: #3c4043; margin-left: 18px; }
+  .menu span { padding: 3px 2px; cursor: default; }
+  .spacer { flex: 1; }
+  .avatars { display: flex; }
+  .av { width: 28px; height: 28px; border-radius: 50%; background: #e8eaed; border: 2px solid #fff; margin-left: -8px; font: 700 11px/24px sans-serif; text-align: center; color: #5f6368; }
+  .av.me { background: #e6f4ea; color: #137333; }
+  .toolbar { display: flex; justify-content: center; padding: 12px 0 6px; }
+  .paper { width: min(760px, 92vw); min-height: 900px; margin: 0 auto 60px; background: #fff; border: 1px solid #e4e4e7; box-shadow: 0 1px 3px rgba(60,64,67,.12); padding: 72px 88px; outline: none; font-size: 15px; line-height: 1.7; }
+  .paper h1 { font-size: 26px; font-weight: 500; margin: 0 0 18px; color: #202124; }
+  .paper p { margin: 0 0 12px; }
+  .paper:focus { border-color: #c9d9f5; box-shadow: 0 1px 3px rgba(60,64,67,.2), 0 0 0 3px rgba(66,133,244,.08); }
+  footer { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #e4e4e7; padding: 7px 18px; font-size: 11px; color: #5f6368; display: flex; gap: 18px; }
+  .caret-hint { color: #9aa0a6; }
+</style>
+</head>
+<body>
+<header>
+  <div class="docicon"></div>
+  <div>
+    <div class="title" id="doctitle">Year 10 Science — Big Ideas</div>
+    <div style="font-size:11px;color:#5f6368">File · Edit · View · Insert · Format · Tools · Help</div>
+  </div>
+  <div class="menu"><span>File</span><span>Edit</span><span>View</span><span>Insert</span><span>Format</span></div>
+  <div class="spacer"></div>
+  <div class="avatars"><div class="av">AK</div><div class="av me">S</div></div>
+</header>
+<div class="toolbar"><span style="font-size:12px;color:#5f6368">Normal text &nbsp;·&nbsp; Arial &nbsp;·&nbsp; 11 &nbsp;·&nbsp; B I U</span></div>
+<article class="paper" id="editor" contenteditable="true" spellcheck="false">
+  <h1>Year 10 Science — Big Ideas</h1>
+  <p>Every living thing is made of cells, and every cell is a small chemical factory that needs energy, matter and instructions.</p>
+  <p>Forces change motion. A net force is the sum of all forces acting on an object, and it is measured in newtons.</p>
+  <p>Energy is conserved. It moves between stores — kinetic, gravitational, chemical, thermal — but is never created or destroyed.</p>
+  <p class="caret-hint">Type here…</p>
+</article>
+<footer><span>Page 1 of 1</span><span id="wordcount">54 words</span><span>English (Australia)</span><span class="spacer" style="flex:1"></span><span id="status">Saved to Drive</span></footer>
+
+<script>
+  const ed = document.getElementById('editor');
+  const wc = document.getElementById('wordcount');
+  const status = document.getElementById('status');
+  function count() {
+    const t = ed.innerText.trim();
+    wc.textContent = (t ? t.split(/\s+/).length : 0) + ' words';
+    status.textContent = 'Saving…';
+    clearTimeout(window.__save);
+    window.__save = setTimeout(() => { status.textContent = 'Saved to Drive'; }, 400);
+  }
+  ed.addEventListener('input', count);
+  count();
+  window.__docText = () => ed.innerText;
+</script>
+</body>
+</html>

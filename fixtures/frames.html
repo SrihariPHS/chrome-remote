@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Frames — cross-origin fixture</title>
+<style>
+  body { margin: 0; background: #0f1115; color: #e7e9ee; font: 15px system-ui, sans-serif; }
+  header { padding: 18px 22px; border-bottom: 1px solid #242833; }
+  h1 { margin: 0; font-size: 18px; }
+  p { margin: 4px 0 0; color: #8f97a4; font-size: 12px; }
+  iframe { display: block; width: calc(100% - 24px); height: 620px; margin: 12px; border: 1px solid #2a2f3a; border-radius: 10px; background: #0f1115; }
+</style>
+</head>
+<body>
+<header><h1>T3 Code — embedded signup</h1><p>The form below is a different origin: 127.0.0.1 top, localhost frame.</p></header>
+<iframe id="f" title="embedded signup"></iframe>
+<script>
+  // Same server, different loopback address => a genuinely cross-origin frame.
+  // (127.0.0.2 is a real Linux loopback alias; 0.0.0.0 binding accepts it.)
+  const host = location.hostname === '127.0.0.2' ? '127.0.0.1' : '127.0.0.2';
+  document.getElementById('f').src = 'http://' + host + ':' + location.port + '/fixtures/form.html';
+</script>
+</body>
+</html>

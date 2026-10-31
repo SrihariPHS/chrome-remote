@@ -1,0 +1,88 @@
+{
+  "when": "2026-10-31T05:28:05.741Z",
+  "loadavg": [
+    13.46,
+    15.5,
+    16.19
+  ],
+  "launch_ms": 813,
+  "node": "v22.23.3",
+  "create_ms": 939,
+  "rows": [
+    {
+      "label": "snap (full, ≤100 els)",
+      "n": 25,
+      "p50": 12.74,
+      "p95": 40.61,
+      "max": 49.02,
+      "engine_p50": 5.97
+    },
+    {
+      "label": "pulse (timers + focus)",
+      "n": 50,
+      "p50": 10.13,
+      "p95": 45.29,
+      "max": 52.47,
+      "engine_p50": 4.26
+    },
+    {
+      "label": "eval (round trip)",
+      "n": 50,
+      "p50": 11.45,
+      "p95": 46.13,
+      "max": 68.61,
+      "engine_p50": 8.1
+    },
+    {
+      "label": "screenshot jpeg q72",
+      "n": 12,
+      "p50": 114.54,
+      "p95": 226.27,
+      "max": 226.27,
+      "engine_p50": 111.57
+    },
+    {
+      "label": "act: 8-step form batch + obs",
+      "n": 15,
+      "p50": 405.48,
+      "p95": 597.33,
+      "max": 597.33,
+      "engine_p50": 240.13
+    },
+    {
+      "label": "act: same batch, dom input",
+      "n": 15,
+      "p50": 273.53,
+      "p95": 576.2,
+      "max": 576.2,
+      "engine_p50": 107.08
+    },
+    {
+      "label": "reflex reaction (in-page)",
+      "n": 3,
+      "p50": 1.2,
+      "p95": 8.8,
+      "max": 8.8,
+      "engine_p50": 1.2
+    }
+  ],
+  "snapshot_bytes": 1260,
+  "snapshot_elements": 21,
+  "pulse_bytes": 1199,
+  "act_obs_bytes": 1260,
+  "reflex": {
+    "n": 3,
+    "p50_ms": 1.2,
+    "max_ms": 8.8
+  },
+  "timer_accuracy": {
+    "delta_ms": 1,
+    "rate": 0.988,
+    "age_ms": 0
+  },
+  "after_loadavg": [
+    10.7,
+    14.76,
+    15.93
+  ]
+}

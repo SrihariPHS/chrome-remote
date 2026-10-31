@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flash Form — batch action fixture</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; background: #0f1115; color: #e7e9ee; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+  form { width: min(560px, 92vw); background: #171a21; border: 1px solid #262a34; border-radius: 14px; padding: 26px; display: grid; gap: 14px; }
+  h1 { margin: 0 0 4px; font-size: 18px; }
+  label { display: grid; gap: 6px; font-size: 12px; color: #9aa1ad; }
+  input, select, textarea { background: #0d0f13; border: 1px solid #2a2f3a; border-radius: 8px; padding: 9px 11px; color: #e7e9ee; font-size: 14px; }
+  .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .row label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #c7ccd5; }
+  button { justify-self: start; background: #d6ff4f; color: #0a0a0b; border: 0; border-radius: 9px; padding: 10px 18px; font-weight: 700; cursor: pointer; }
+  #result { font-family: ui-monospace, monospace; font-size: 12px; color: #9ee37d; white-space: pre-wrap; }
+  .hint { font-size: 11px; color: #6b7280; }
+</style>
+</head>
+<body>
+<form id="form">
+  <h1>Create account</h1>
+  <div class="hint">Eight fields, one act batch. The submit button only works once every required field is valid.</div>
+  <label>Full name <input name="name" autocomplete="off" /></label>
+  <label>Email <input name="email" type="email" autocomplete="off" /></label>
+  <label>Role
+    <select name="role">
+      <option value="">Choose…</option>
+      <option value="engineer">Engineer</option>
+      <option value="designer">Designer</option>
+      <option value="researcher">Researcher</option>
+    </select>
+  </label>
+  <div class="row">
+    <span class="hint">Plan</span>
+    <label><input type="radio" name="plan" value="free" /> Free</label>
+    <label><input type="radio" name="plan" value="pro" /> Pro</label>
+    <label><input type="radio" name="plan" value="team" /> Team</label>
+  </div>
+  <div class="row"><label><input type="checkbox" name="terms" /> I agree to the terms</label></div>
+  <label>Notes <textarea name="notes" rows="3"></textarea></label>
+  <button type="submit">Create account</button>
+  <div id="result"></div>
+</form>
+<script>
+  const form = document.getElementById('form');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const d = new FormData(form);
+    document.getElementById('result').textContent = JSON.stringify(Object.fromEntries(d), null, 1);
+    document.title = 'Account created';
+  });
+</script>
+</body>
+</html>
