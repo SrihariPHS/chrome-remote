@@ -1,5 +1,5 @@
 /*
- * Flags bot — poll300.
+ * Flags bot — event-driven.
  * The only worker-owned file. The fixture and oracle are pinned.
  *
  * Recognises the flag from its PIXELS: the rendered <img> is drawn into a 6x6
@@ -39,7 +39,15 @@
     if (best) best.click();
   };
 
-  setInterval(tick, 300);
+  new MutationObserver(tick).observe(document.body, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['data-live'],
+  });
+
+  setInterval(tick, 300); // watchdog only
   tick();
-  window.__kbot = { mode: 'poll300' };
+  window.__kbot = { mode: 'mutation' };
 })();
