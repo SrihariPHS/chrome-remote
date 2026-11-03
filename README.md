@@ -1,5 +1,7 @@
 # chrome
 
+[![ci](https://github.com/SrihariPHS/chrome-remote/actions/workflows/ci.yml/badge.svg)](https://github.com/SrihariPHS/chrome-remote/actions/workflows/ci.yml)
+
 **A remote Chromium you drive with one intent per call — and watch from any device.**
 
 Most "computer use" is slow because it moves pixels and one action at a time across
