@@ -25,7 +25,7 @@ const DATA = process.env.IW_DATA || path.join(ROOT, 'data');
 const PORT = Number(process.env.IW_PORT || process.env.PORT || 8787);
 const HOST = process.env.IW_HOST || '0.0.0.0';
 const SELF = `http://127.0.0.1:${PORT}`;
-const VERSION = '0.1.0';
+const VERSION = '1.0.0';
 
 await mkdir(path.join(DATA, 'shots'), { recursive: true });
 await mkdir(path.join(DATA, 'uploads'), { recursive: true });
