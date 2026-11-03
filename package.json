@@ -33,10 +33,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/inkwork/chrome-remote.git"
+    "url": "https://github.com/SrihariPHS/chrome-remote.git"
   },
   "homepage": "https://chrome.inkwork.studio",
   "bugs": {
-    "url": "https://github.com/inkwork/chrome-remote/issues"
+    "url": "https://github.com/SrihariPHS/chrome-remote/issues"
   }
 }

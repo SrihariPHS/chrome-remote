@@ -55,14 +55,16 @@ after(async () => {
 });
 
 test('health reports a warm browser', async () => {
+  // A cold CI runner can take 10-20 s to bring Chromium up, so wait for the
+  // browser to actually be warm instead of assuming it landed inside 6 s.
   let h;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 300; i++) {
     h = await api('/health');
     if (h.browser) break;
     await new Promise((r) => setTimeout(r, 100));
   }
   assert.equal(h.ok, true);
-  assert.equal(h.browser, true);
+  assert.equal(h.browser, true, 'browser did not warm up within 30 s');
   assert.ok(h.launch_ms > 0);
 });
 
