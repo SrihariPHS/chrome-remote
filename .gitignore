@@ -3,4 +3,5 @@ data/
 *.log
 bench/*.jpg
 bench/*.png
+deploy/secrets.env
 .DS_Store

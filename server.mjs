@@ -24,6 +24,7 @@ const FIXTURES = path.join(ROOT, 'fixtures');
 const DATA = process.env.IW_DATA || path.join(ROOT, 'data');
 const PORT = Number(process.env.IW_PORT || process.env.PORT || 8787);
 const HOST = process.env.IW_HOST || '0.0.0.0';
+const SELF = `http://127.0.0.1:${PORT}`;
 const VERSION = '0.1.0';
 
 await mkdir(path.join(DATA, 'shots'), { recursive: true });
@@ -70,6 +71,13 @@ const fleet = new Fleet({
 });
 const svc = service(fleet);
 
+/** '/newtab' means the start page served by this process, not a web address. */
+function startUrl(u) {
+  if (!u || u === 'newtab' || u === '/newtab') return `${SELF}/newtab`;
+  if (/^\/(?!\/)/.test(u)) return SELF + u;
+  return u;
+}
+
 /* ------------------------------------------------------------------- utils */
 
 const MIME = {
@@ -82,6 +90,7 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
   '.woff2': 'font/woff2',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 const SECURITY_HEADERS = {
@@ -202,6 +211,12 @@ const ROUTES = {
   'GET /console.css': async (req, res) => serveFile(res, WEB, 'console.css', { cache: 'no-store' }),
   'GET /app.js': async (req, res) => serveFile(res, WEB, 'app.js', { cache: 'no-store' }),
   'GET /style.css': async (req, res) => serveFile(res, WEB, 'style.css', { cache: 'no-store' }),
+  'GET /newtab': async (req, res) => serveFile(res, WEB, 'newtab.html', { cache: 'no-store' }),
+  'GET /manifest.webmanifest': async (req, res) => serveFile(res, WEB, 'manifest.webmanifest', { cache: 'no-cache' }),
+  'GET /icon.svg': async (req, res) => serveFile(res, WEB, 'icon.svg', { cache: 'no-cache' }),
+  'GET /icon-192.png': async (req, res) => serveFile(res, WEB, 'icon-192.png', { cache: 'no-cache' }),
+  'GET /icon-512.png': async (req, res) => serveFile(res, WEB, 'icon-512.png', { cache: 'no-cache' }),
+  'GET /apple-touch-icon.png': async (req, res) => serveFile(res, WEB, 'apple-touch-icon.png', { cache: 'no-cache' }),
   'GET /favicon.svg': async (req, res) => serveFile(res, WEB, 'favicon.svg'),
   'GET /robots.txt': async (req, res) => serveFile(res, WEB, 'robots.txt'),
   'GET /health': async (req, res) => {
@@ -230,7 +245,7 @@ const ROUTES = {
     const b = await readBody(req);
     if (b.viewport && (Number(b.viewport.width) > 1920 || Number(b.viewport.height) > 1200)) return send(res, 400, { ok: false, error: 'viewport_too_large' });
     if (b.url && !/^https?:\/\//i.test(b.url) && b.url !== 'about:blank') return send(res, 400, { ok: false, error: 'url_scheme' });
-    const r = await svc.open({ name: b.name, url: b.url, viewport: b.viewport, observe: b.observe === true || b.observe === 'true', max: Number(b.max) || 80 });
+    const r = await svc.open({ name: b.name, url: startUrl(b.url), viewport: b.viewport, observe: b.observe === true || b.observe === 'true', max: Number(b.max) || 80 });
     send(res, 201, { ...r, session: r.summary });
   },
   'GET /api/metrics': async (req, res) => send(res, 200, { ok: true, ...fleet.metrics.summary() }),
@@ -310,12 +325,21 @@ async function apiSession(req, res, id, op, sub) {
       return send(res, 200, r);
     }
     case 'timeline': return send(res, 200, await svc.timeline(id));
+    case 'viewport': {
+      const width = Math.max(320, Math.min(1920, Number(b.width) || 1280));
+      const height = Math.max(300, Math.min(1200, Number(b.height) || 800));
+      await s.setViewport({ width, height });
+      const c = casters.get(id);
+      if (c) for (const ws of c.viewers) { try { ws.send(JSON.stringify({ type: 'reset' })); } catch {} }
+      await stopCaster(id);
+      return send(res, 200, { ok: true, viewport: s.viewport });
+    }
     case 'tabs': {
       if (req.method === 'GET' || (!sub && !b.action)) {
         return send(res, 200, { ok: true, tabs: s.tabs(), active: s.page ? s.tabId(s.page) : null });
       }
       const action = sub || b.action;
-      if (action === 'new') return send(res, 200, { ok: true, ...(await s.newTab(b.url)) });
+      if (action === 'new') return send(res, 200, { ok: true, ...(await s.newTab(startUrl(b.url))) });
       if (action === 'activate') return send(res, 200, s.activateTab(b.id));
       if (action === 'close') return send(res, 200, await s.closeTab(b.id));
       return send(res, 400, { ok: false, error: 'bad_tab_action', action });
@@ -539,12 +563,14 @@ function openapi() {
 /* ------------------------------------------------------------------- boot */
 
 server.listen(PORT, HOST, async () => {
-  console.log(`\n  chrome.inkwork.studio ${VERSION}`);
-  console.log(`  console   http://127.0.0.1:${PORT}/  (PIN gate${PIN ? '' : ' disabled'})`);
-  console.log(`  api       http://127.0.0.1:${PORT}/api/sessions`);
-  console.log(`  mcp       http://127.0.0.1:${PORT}/mcp`);
-  console.log(`  token     ${explicitToken ? 'from IW_TOKEN' : path.join(DATA, 'token')} (API/MCP)`);
-  console.log(`  chrome    ${fleet.executablePath}\n`);
+  const local = `http://127.0.0.1:${PORT}`;
+  console.log(`\n  chrome ${VERSION} — a remote Chromium you can drive from anywhere`);
+  console.log(`  open      ${local}/${TOKEN && !OPEN ? `?token=${TOKEN}` : ''}`);
+  console.log(`  console   ${local}/console  (diagnostics${PIN ? ', PIN set' : ''})`);
+  console.log(`  api       ${local}/api/sessions`);
+  console.log(`  mcp       ${local}/mcp`);
+  console.log(`  auth      ${OPEN ? 'OPEN — no token required (IW_OPEN=1)' : explicitToken ? 'IW_TOKEN' : `token ${TOKEN}`}`);
+  console.log(`  chrome    ${fleet.executablePath || 'not found — set IW_CHROME'}\n`);
   fleet.ensure()
     .then(async () => {
       console.log(`  browser warm in ${fleet.launchMs} ms`);

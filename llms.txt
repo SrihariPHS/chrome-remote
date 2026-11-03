@@ -151,3 +151,21 @@ Each tool call is one intent. Do not use one call per click.
   exposing it. Do not run it on a shared host without a gate.
 - `POST /api/s/{id}/eval` executes page JavaScript, not Node. The browser can
   still reach private-network URLs; treat it as a network foothold.
+
+## Tabs and viewport
+
+```
+GET  /api/s/{id}/tabs                        -> [{id, url, title, active}]
+POST /api/s/{id}/tabs {"action":"new","url":"https://…"}
+POST /api/s/{id}/tabs {"action":"activate","id":"t2"}
+POST /api/s/{id}/tabs {"action":"close","id":"t2"}
+POST /api/s/{id}/viewport {"width":390,"height":844}   # render a mobile layout
+```
+
+`snap`, `act`, `eval` and `screenshot` always target the **active** tab.
+
+## The human window
+
+`/` is a plain browser UI (tabs, address bar, live view, touch on phones) for the
+person watching. `/console` is the diagnostics view. Neither is required by an
+agent; ignore both unless you are debugging visually.

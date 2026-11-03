@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Syntax
+        run: |
+          node --check server.mjs
+          for f in src/*.mjs public/*.js; do node --check "$f"; done
+      - name: Chromium
+        run: npx --yes playwright@1.64.1 install --with-deps chromium
+      - name: End-to-end
+        run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t chrome-remote:ci .
+      - name: Smoked boot
+        run: |
+          docker run -d --name chrome-ci -p 8787:8787 --shm-size=1g chrome-remote:ci
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8787/health > /dev/null; then echo up; exit 0; fi
+            sleep 2
+          done
+          docker logs chrome-ci; exit 1

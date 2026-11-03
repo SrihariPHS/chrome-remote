@@ -1,147 +1,76 @@
-# Deploying chrome.inkwork.studio
+# Deploying
 
-The app is a single Node process with a Chromium child. It needs:
+The service is one Node process plus a Chromium child. That is the whole moving part.
 
-- 2 vCPU / 2 GB RAM recommended (one browser, up to 4 contexts)
-- 1 GB `/dev/shm` (Chromium)
-- a persistent `./data` for the token and downloads
-- loopback-only port exposure; TLS terminates at Cloudflare
+## Sizing
 
-## 1. Local / LAN
+| | minimum | comfortable |
+| --- | --- | --- |
+| CPU | 1 vCPU | 2 vCPU |
+| RAM | 1 GB | 2 GB for 4 sessions |
+| `/dev/shm` | 512 MB | 1 GB |
+| disk | 500 MB | 2 GB with downloads |
 
-```bash
-cd /workspace/chrome
-npm install
-node server.mjs
-# http://127.0.0.1:8787/?token=$(cat data/token)
-```
+Each session is a Chromium context (~80–150 MB). `IW_MAX_SESSIONS` is the real
+memory dial: 4 sessions on 2 GB, 2 on 1 GB.
 
-Open the console from a browser on the same LAN with `?token=…`, or put it
-behind your own reverse proxy. Do not bind it to a public interface without the
-token gate.
-
-## 2. Docker (NAS)
-
-The repo currently lives in the T3 workspace: host
-`/mnt/Pool-1/apps/t3code/workspace/chrome`, container `/workspace/chrome`.
-For a standalone deployment, copy it to `/mnt/Pool-1/apps/chrome` first so a T3
-workspace change or restore cannot take the service with it:
+## Docker
 
 ```bash
-sudo -n cp -a /mnt/Pool-1/apps/t3code/workspace/chrome /mnt/Pool-1/apps/chrome
+docker compose up -d --build          # root docker-compose.yml
+docker compose logs chrome | head -20 # prints the URL with its token
 ```
 
-The NAS is currently at ~1 GB free RAM while other agent work runs. Do not add
-a 2 GB browser container until that frees up; the Mac is a better host for the
-lowest latency anyway.
+The token is generated on first boot and persisted in the `chrome-data` volume.
+Rotate it by deleting `/data/token` and restarting.
 
-```bash
-cd /mnt/Pool-1/apps/chrome/deploy
-cp secrets.env.example secrets.env
-chmod 600 secrets.env
-# put a 48-byte random token in IW_TOKEN
-openssl rand -base64 48
-docker compose up -d --build
-curl -s -H "Authorization: Bearer $(grep ^IW_TOKEN= secrets.env | cut -d= -f2)" \
-  http://127.0.0.1:8787/health
+## Behind TLS
+
+Never publish port 8787 directly. Put a proxy in front and keep the container on
+loopback or a private network.
+
+Caddy:
+
 ```
-
-The health check is unauthenticated on purpose and exposes no URLs or tokens.
-
-Logs: `docker compose logs -f chrome`.
-Stop: `docker compose down` (sessions are in memory and disappear).
-Update: `docker compose up -d --build`.
-
-Resource notes:
-- `shm_size: 1gb` is required for Chromium; without it pages crash under load.
-- `mem_limit: 2g` is a guardrail, not a guarantee. One context is ~60–120 MB;
-  heavy sites (Google Docs, video) can double that.
-- `cpus: 2.0` keeps one noisy agent from starving T3 Code.
-
-## 3. Cloudflare tunnel + DNS
-
-The existing NAS tunnel is **remotely managed** (ingress lives in Cloudflare,
-not in a local YAML). Add the hostname; do not replace the whole ingress list,
-or every other `*.inkwork.studio` service falls off.
-
-### Dashboard route (least risk)
-
-1. Cloudflare Zero Trust → Networks → Tunnels → the NAS tunnel → Public Hostname.
-2. Add `chrome.inkwork.studio`, service `HTTP`, URL `127.0.0.1:8787`
-   (or `chrome-inkwork:8787` if the connector is on the same Docker network).
-3. DNS is created automatically as a proxied CNAME to
-   `<tunnel-id>.cfargotunnel.com`.
-4. Test: `curl -sI https://chrome.inkwork.studio/health` → 200.
-
-### API route (what the dashboard does)
-
-```bash
-# Read the current ingress first, then PUT it back with the new rule appended.
-curl -s -H "Authorization: Bearer $CF_API_TOKEN" \
-  "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/cfd_tunnel/$TUNNEL_ID/configurations"
-
-# Append, preserving every existing rule:
-#   {"hostname":"chrome.inkwork.studio","service":"http://127.0.0.1:8787"}
-# then PUT the full {"config":{"ingress":[...]}} document.
-```
-
-DNS is a proxied CNAME `chrome` → `<tunnel-id>.cfargotunnel.com`.
-
-### Access control
-
-The app requires `Authorization: Bearer $IW_TOKEN` on every API/MCP route. The
-console itself is public HTML but cannot call the API without the token, which
-it stores in `localStorage` after a `?token=` bootstrap.
-
-For a stronger gate, add Cloudflare Access (email OTP or Google) in front of the
-hostname. That protects the console *and* the API; MCP clients then need a
-service token or an Access bypass for `/mcp`.
-
-Do not expose a bare `http://0.0.0.0:8787` to the internet. The token is the
-whole security boundary; browsers controlled by this service can reach private
-network addresses.
-
-## 4. MCP wiring (T3 Code / OpenCode)
-
-Remote MCP (streamable HTTP, stateless):
-
-```json
-{
-  "mcpServers": {
-    "chrome": {
-      "type": "http",
-      "url": "https://chrome.inkwork.studio/mcp",
-      "headers": { "Authorization": "Bearer <IW_TOKEN>" }
-    }
-  }
+chrome.example.com {
+  reverse_proxy 127.0.0.1:8787
 }
 ```
 
-Install the skill at `skill/SKILL.md` into
-`~/.config/opencode/skills/chrome/SKILL.md` so the agent knows the discipline
-(one intent per call, snap not screenshot, reflex for timers).
+Cloudflare Tunnel (`cloudflared`):
 
-## 5. Verification after deploy
-
-```bash
-BASE=https://chrome.inkwork.studio
-T=<IW_TOKEN>
-curl -s $BASE/health
-curl -s $BASE/api/sessions -H "Authorization: Bearer $T"
-S=$(curl -s -X POST $BASE/api/sessions -H "Authorization: Bearer $T" \
-  -H 'content-type: application/json' -d '{"url":"https://example.com"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["session"]["id"])')
-curl -s -X POST $BASE/api/s/$S/snap -H "Authorization: Bearer $T" \
-  -H 'content-type: application/json' -d '{"max":40}' | head -c 600
-curl -s -X POST $BASE/api/s/$S/close -H "Authorization: Bearer $T" \
-  -H 'content-type: application/json' -d '{}'
+```yaml
+tunnel: <id>
+ingress:
+  - hostname: chrome.example.com
+    service: http://127.0.0.1:8787
+  - service: http_status:404
 ```
 
-Also open the console, confirm the live view, then take control and type in a
-search box. That exercises screencast + input over the public path.
+WebSockets are required for the live view (`/api/s/{id}/live`); both proxies above
+pass them through by default.
 
-## 6. Rollback
+### Sign-in for people
 
-`docker compose down` removes the process; the tunnel hostname can be disabled
-in the dashboard. No data migrations, no volumes to preserve except
-`deploy/data/token`.
+Set `IW_PIN` to six digits. A phone can then sign in with the PIN instead of pasting
+a 32-character token; the PIN sets an HttpOnly cookie for 30 days. Agents keep using
+the bearer token.
+
+## Operating it
+
+- `GET /health` is unauthenticated: `browser`, `launch_ms`, `sessions`, and p50/p95
+  per operation. It is the first thing to read when something feels slow.
+- `IW_SESSION_TTL_MIN=20` reaps idle sessions so a forgotten tab cannot hold a
+  browser forever.
+- `IW_DEBUG=1` logs request errors to stdout.
+- The human window is `/`; diagnostics are `/console`. Both need auth.
+
+## Notes
+
+- `IW_HEADFUL=1` runs Chromium under Xvfb (the Docker image does this). It is slower
+  to start but behaves more like a real browser on sites that check for headless.
+- The screencast is JPEG over one WebSocket, so it costs bandwidth: roughly
+  10–40 KB per changed frame at 55% quality, capped at 4 fps per viewer when the
+  page is not repainting.
+- Sessions persist cookies to `data/profiles/<name>.json` on close, so a login
+  survives a session being recreated. It is a single named profile, not per user.

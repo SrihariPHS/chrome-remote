@@ -1,37 +1,27 @@
-name: chrome-inkwork
-
-networks:
-  default:
-  oc:
-    external: true
-    name: inkwork-agents_oc-internal
+# Production-shaped example: loopback port, TLS in front, persistent data.
+# For a plain local run use the docker-compose.yml in the repository root.
+name: chrome-remote
 
 services:
   chrome:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: chrome-inkwork:0.1.0
-    container_name: chrome-inkwork
+    image: chrome-remote:latest
+    container_name: chrome
     restart: unless-stopped
     env_file:
       - ./secrets.env
     environment:
       IW_PORT: "8787"
       IW_DATA: /data
-      IW_MAX_SESSIONS: "3"
+      IW_MAX_SESSIONS: "4"
       IW_POOL: "2"
-      IW_SESSION_TTL_MIN: "90"
+      IW_SESSION_TTL_MIN: "20"
       IW_HEADFUL: "1"
     ports:
-      # Loopback only: the Cloudflare tunnel reaches it from the host.
-      # (host 8787 is already used by the school container)
+      # Loopback only: your proxy (Caddy, nginx, cloudflared) reaches it here.
       - "127.0.0.1:8788:8787"
-    networks:
-      default:
-      oc:
-        aliases:
-          - chrome-inkwork
     volumes:
       - ./data:/data
     shm_size: "1gb"

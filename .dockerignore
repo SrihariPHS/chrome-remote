@@ -1,9 +1,9 @@
 node_modules
 data
-deploy/data
-deploy/secrets.env
+.git
+.github
 bench
 test
-.git
+docs
 *.log
-bench/ui*.png
+deploy/secrets.env

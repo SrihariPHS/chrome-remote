@@ -11,7 +11,7 @@
 import { chromium } from 'playwright-core';
 import { readFile, writeFile, rename, stat } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const SDK_PATH = new URL('./page-sdk.js', import.meta.url);
@@ -42,6 +42,50 @@ export const CHROME_ARGS = [
 
 export const DEFAULT_VIEWPORT = { width: 1280, height: 800 };
 
+/**
+ * Find a Chromium: explicit config, then the usual system locations, then a
+ * Playwright download (`npx playwright install chromium`). No hidden default.
+ */
+export function resolveChromePath(explicit) {
+  const named = explicit || process.env.IW_CHROME || process.env.CHROME_PATH;
+  if (named) return named;
+
+  const fixed = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/snap/bin/chromium',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+  ];
+  for (const p of fixed) if (existsSync(p)) return p;
+
+  const roots = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    path.join(process.env.HOME || '/root', '.cache', 'ms-playwright'),
+    '/ms-playwright',
+  ].filter(Boolean);
+
+  for (const root of roots) {
+    let entries = [];
+    try { entries = readdirSync(root); } catch { continue; }
+    const builds = entries.filter((e) => e.startsWith('chromium-')).sort().reverse();
+    for (const build of builds) {
+      const candidates = [
+        path.join(root, build, 'chrome-linux', 'chrome'),
+        path.join(root, build, 'chrome-linux64', 'chrome'),
+        path.join(root, build, 'chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'),
+        path.join(root, build, 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'),
+        path.join(root, build, 'chrome-win', 'chrome.exe'),
+      ];
+      for (const c of candidates) if (existsSync(c)) return c;
+    }
+  }
+  return null;
+}
+
 let idCounter = 0;
 const nextId = () => 's_' + (++idCounter).toString(36) + randomBytes(2).toString('hex');
 
@@ -70,7 +114,7 @@ export class Metrics {
 
 export class Fleet {
   constructor(opts = {}) {
-    this.executablePath = opts.executablePath || process.env.IW_CHROME || '/workspace/chromium-1243/chrome-linux64/chrome';
+    this.executablePath = resolveChromePath(opts.executablePath);
     this.headless = opts.headless !== false;
     this.maxSessions = Number(opts.maxSessions || process.env.IW_MAX_SESSIONS || 4);
     this.poolSize = Math.max(0, Math.min(2, Number(opts.poolSize ?? process.env.IW_POOL ?? 1)));
@@ -94,6 +138,9 @@ export class Fleet {
 
   async ensure() {
     if (this.browser && this.browser.isConnected()) return this.browser;
+    if (!this.executablePath) {
+      throw new Error('No Chromium found. Set IW_CHROME=/path/to/chrome, or run: npx playwright install chromium');
+    }
     if (this.launching) return this.launching;
     this.launching = (async () => {
       const t0 = nowMs();
@@ -316,6 +363,17 @@ export class Session {
     return this.tabIds.get(page);
   }
 
+  /** Titles arrive after navigation, so read them on load and again shortly after. */
+  refreshTitle(page = this.page) {
+    if (!page || page.isClosed()) return;
+    page.title().then((t) => {
+      const v = String(t || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      if (!v) return;
+      this.pageTitles.set(page, v);
+      if (page === this.page) this.title = v;
+    }).catch(() => {});
+  }
+
   tabs() {
     return [...this.pages].filter((p) => !p.isClosed()).map((p) => ({
       id: this.tabId(p),
@@ -325,11 +383,22 @@ export class Session {
     }));
   }
 
+  /** Match the remote page to the device looking at it. */
+  async setViewport({ width, height }) {
+    const vp = { width: Math.round(width), height: Math.round(height) };
+    if (!this.page || this.page.isClosed()) throw new Error('no page');
+    await this.page.setViewportSize(vp);
+    this.viewport = vp;
+    return vp;
+  }
+
   async newTab(url) {
     const page = await this.context.newPage();
     await this.adopt(page, true);
+    await page.setViewportSize(this.viewport).catch(() => {});
     if (url) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
-    return { id: this.tabId(page), url: page.url() };
+    this.refreshTitle(page);
+    return { id: this.tabId(page), url: page.url(), title: this.pageTitles.get(page) || '' };
   }
 
   activateTab(id) {
@@ -358,8 +427,12 @@ export class Session {
     page.on('framenavigated', (f) => {
       if (f !== page.mainFrame()) return;
       this.title = null;
-      page.title().then((t) => this.pageTitles.set(page, String(t || '').slice(0, 60))).catch(() => {});
+      this.pageTitles.delete(page);
+      this.refreshTitle(page);
+      const t = setTimeout(() => this.refreshTitle(page), 500);
+      t.unref?.();
     });
+    page.on('load', () => this.refreshTitle(page));
     page.on('close', () => {
       this.pages.delete(page);
       if (this.page === page) this.page = [...this.pages].find((p) => !p.isClosed()) || null;

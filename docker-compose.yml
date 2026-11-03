@@ -1,0 +1,31 @@
+# Self-host chrome: docker compose up -d --build
+#
+# The first run prints the access URL (with its token) to the logs:
+#   docker compose logs chrome | head -20
+name: chrome-remote
+
+services:
+  chrome:
+    build: .
+    image: chrome-remote:latest
+    container_name: chrome
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      IW_MAX_SESSIONS: "4"
+      IW_SESSION_TTL_MIN: "20"
+      # Six digits for phones, instead of pasting a 32-character token:
+      # IW_PIN: "123456"
+    volumes:
+      - chrome-data:/data
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  chrome-data:
