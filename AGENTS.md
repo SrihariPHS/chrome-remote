@@ -10,8 +10,9 @@ node --test test/*.test.mjs          # real Chromium; ~20 s
 node bench/bench.mjs       # latency + bytes
 ```
 
-The token is at `data/token` (never commit it). Chromium is
-`/workspace/chromium-1243/chrome-linux64/chrome`; override `IW_CHROME`.
+The token is at `data/token` (never commit it). Chromium is found by
+`resolveChromePath()` — system paths first, then the Playwright cache; override
+with `IW_CHROME`.
 
 ## Invariants
 
@@ -32,7 +33,7 @@ The token is at `data/token` (never commit it). Chromium is
 - `src/browser.mjs` — Fleet/Session, CDP hot paths, frames, act steps.
 - `src/page-sdk.js` — `iw.snap/pulse/reflex/...` (in-page).
 - `src/mcp.mjs` — MCP tools; keep tool names intent-shaped.
-- `public/` — console; vanilla JS, no framework.
+- `public/` — the human browser window at `/` and the diagnostics UI at `/console`; vanilla JS, no framework.
 - `fixtures/` — deterministic pages for tests and demos.
 - `deploy/` — Docker + Cloudflare notes (deployment itself needs owner approval).
 
