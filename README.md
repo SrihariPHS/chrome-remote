@@ -30,6 +30,56 @@ compact, timestamped view of the page instead of an image.
 The console at `/` is the human side: live JPEG screencast, take-control input,
 countdown, focus, mutation age, ref tree, operation timeline and latency.
 
+
+## Two faces, one browser
+
+- **`/` — the human window.** A normal browser: tabs along the top, address bar,
+  back/forward/reload, live view. Click and type straight into it; input goes
+  over the same WebSocket as the frames. No metrics, no timelines.
+- **`/console` — the diagnostics console.** Ref tree, pulse, operation latency,
+  console errors, screencast tools. This is for whoever is debugging an agent,
+  not for everyday use.
+
+## Why it is fast
+
+Measured medians on a live instance (n = lifetime operations):
+
+| operation | p50 | what it is |
+| --- | --- | --- |
+| `eval` | **5.7 ms** | run JS in the page over an existing CDP session |
+| `pulse` | **14 ms** | timers, focus, dialogs, changed numbers — no screenshot |
+| `snap` | **72 ms** | page as a compact ref tree (~1–6 KB) |
+| `screenshot` | **82 ms** | JPEG of the viewport |
+| `act` | **160 ms** | a whole batch of UI steps + post-observation |
+| `goto` | **1.1 s** | network-bound; the browser work is the small part |
+
+Four things do most of the work:
+
+1. **Nothing is launched per call.** One warm Chromium, one warm context, one
+   CDP session per page. The 3–5 s browser start is paid once.
+2. **Observations are text, not pixels.** A snapshot is a few KB of refs
+   (`@e12 button "Turn in"`) instead of a 700 KB screenshot, so a model can read
+   a page many times per second without burning context.
+3. **One intent, one round trip.** `act` takes a batch of steps and returns the
+   new observation, so an eight-step form fill is one call, not eight.
+4. **The waiting happens in the page.** `pulse` and `reflex` run inside the tab
+   at 4–16 ms, so a 20-second countdown is solved by the browser rather than by
+   polling from the model.
+
+The human UI adds a fifth: **binary JPEG frames over one WebSocket**, with
+pointer and keyboard input going back down the same socket.
+
+## Tabs
+
+```
+GET  /api/s/{id}/tabs                  list: [{id, url, title, active}]
+POST /api/s/{id}/tabs {action:"new", url}
+POST /api/s/{id}/tabs {action:"activate", id}
+POST /api/s/{id}/tabs {action:"close", id}
+```
+
+Agent operations (`snap`, `act`, `eval`) always target the active tab.
+
 ---
 
 ## Quick start

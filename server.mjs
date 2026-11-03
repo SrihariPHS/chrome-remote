@@ -197,7 +197,9 @@ const ROUTES = {
   'GET /': async (req, res) => serveFile(res, WEB, 'index.html', { cache: 'no-store' }),
   'GET /go': async (req, res) => serveFile(res, WEB, 'index.html', { cache: 'no-store' }),
   'GET /google': async (req, res) => serveFile(res, WEB, 'index.html', { cache: 'no-store' }),
-  'GET /console': async (req, res) => serveFile(res, WEB, 'index.html', { cache: 'no-store' }),
+  'GET /console': async (req, res) => serveFile(res, WEB, 'console.html', { cache: 'no-store' }),
+  'GET /console-app.js': async (req, res) => serveFile(res, WEB, 'console-app.js', { cache: 'no-store' }),
+  'GET /console.css': async (req, res) => serveFile(res, WEB, 'console.css', { cache: 'no-store' }),
   'GET /app.js': async (req, res) => serveFile(res, WEB, 'app.js', { cache: 'no-store' }),
   'GET /style.css': async (req, res) => serveFile(res, WEB, 'style.css', { cache: 'no-store' }),
   'GET /favicon.svg': async (req, res) => serveFile(res, WEB, 'favicon.svg'),
@@ -308,6 +310,16 @@ async function apiSession(req, res, id, op, sub) {
       return send(res, 200, r);
     }
     case 'timeline': return send(res, 200, await svc.timeline(id));
+    case 'tabs': {
+      if (req.method === 'GET' || (!sub && !b.action)) {
+        return send(res, 200, { ok: true, tabs: s.tabs(), active: s.page ? s.tabId(s.page) : null });
+      }
+      const action = sub || b.action;
+      if (action === 'new') return send(res, 200, { ok: true, ...(await s.newTab(b.url)) });
+      if (action === 'activate') return send(res, 200, s.activateTab(b.id));
+      if (action === 'close') return send(res, 200, await s.closeTab(b.id));
+      return send(res, 400, { ok: false, error: 'bad_tab_action', action });
+    }
     case 'recipe': {
       if (!sub) return send(res, 400, { ok: false, error: 'no_recipe' });
       const r = await runRecipe(s, sub, b);
@@ -406,8 +418,28 @@ async function startCaster(session) {
     }
     cdp.send('Page.screencastFrameAck', { sessionId: f.sessionId }).catch(() => {});
   });
-  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 55, maxWidth: 1280, maxHeight: 800, everyNthFrame: 1 });
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 55, maxWidth: 1280, maxHeight: 800, everyNthFrame: 1 }).catch(() => {});
   caster.started = true;
+
+  // Some builds (headless without a compositor, or a page that never repaints)
+  // never emit screencast frames. Fall back to a 4 fps capture pump so a human
+  // always sees something, then stop it as soon as real frames flow.
+  caster.pump = setInterval(async () => {
+    if (caster.frames > 0) { clearInterval(caster.pump); caster.pump = null; return; }
+    if (!caster.viewers.size) { clearInterval(caster.pump); caster.pump = null; return; }
+    try {
+      const page = caster.session.page;
+      if (!page || page.isClosed()) return;
+      const buf = await page.screenshot({ type: 'jpeg', quality: 55 });
+      for (const ws of caster.viewers) {
+        if (ws.readyState === 1 && ws.bufferedAmount < 4_000_000) {
+          try { ws.send(buf, { binary: true }); } catch {}
+        }
+      }
+    } catch {}
+  }, 250);
+  caster.pump.unref?.();
+
   casters.set(session.id, caster);
   return caster;
 }
@@ -416,6 +448,7 @@ async function stopCaster(id) {
   const c = casters.get(id);
   if (!c) return;
   casters.delete(id);
+  if (c.pump) { clearInterval(c.pump); c.pump = null; }
   c.cdp.removeAllListeners('Page.screencastFrame');
   try { await c.cdp.send('Page.stopScreencast'); } catch {}
 }

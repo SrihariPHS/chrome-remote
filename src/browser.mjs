@@ -256,6 +256,9 @@ export class Session {
     this.lastActive = Date.now();
     this.page = null;
     this.pages = new Set();
+    this.tabIds = new Map();
+    this.tabSeq = 0;
+    this.pageTitles = new Map();
     this.cdp = null;
     this.cdps = new WeakMap();
     this.frameTags = new Map(); // Frame -> 'f1'
@@ -308,11 +311,55 @@ export class Session {
     return page;
   }
 
+  tabId(page) {
+    if (!this.tabIds.has(page)) this.tabIds.set(page, `t${++this.tabSeq}`);
+    return this.tabIds.get(page);
+  }
+
+  tabs() {
+    return [...this.pages].filter((p) => !p.isClosed()).map((p) => ({
+      id: this.tabId(p),
+      url: p.url(),
+      title: this.pageTitles.get(p) || '',
+      active: p === this.page,
+    }));
+  }
+
+  async newTab(url) {
+    const page = await this.context.newPage();
+    await this.adopt(page, true);
+    if (url) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+    return { id: this.tabId(page), url: page.url() };
+  }
+
+  activateTab(id) {
+    const hit = [...this.pages].find((p) => this.tabId(p) === id && !p.isClosed());
+    if (!hit) return { ok: false, error: 'no_tab' };
+    this.page = hit;
+    hit.bringToFront().catch(() => {});
+    return { ok: true, id, url: hit.url() };
+  }
+
+  async closeTab(id) {
+    const hit = [...this.pages].find((p) => this.tabId(p) === id);
+    if (!hit) return { ok: false, error: 'no_tab' };
+    await hit.close().catch(() => {});
+    this.pages.delete(hit);
+    this.tabIds.delete(hit);
+    if (this.page === hit) this.page = [...this.pages].find((p) => !p.isClosed()) || null;
+    return { ok: true, id, remaining: this.pages.size };
+  }
+
   async adopt(page, primary = false) {
     if (this.pages.has(page)) { if (primary) this.page = page; return; }
     this.pages.add(page);
     if (primary || !this.page || this.page.isClosed()) this.page = page;
     page.setDefaultTimeout(20000);
+    page.on('framenavigated', (f) => {
+      if (f !== page.mainFrame()) return;
+      this.title = null;
+      page.title().then((t) => this.pageTitles.set(page, String(t || '').slice(0, 60))).catch(() => {});
+    });
     page.on('close', () => {
       this.pages.delete(page);
       if (this.page === page) this.page = [...this.pages].find((p) => !p.isClosed()) || null;
